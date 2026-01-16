@@ -44,7 +44,7 @@ export class RegistrosAccesoService {
             FROM RankedAccess
             WHERE rn_primera = 1 OR rn_ultima = 1
             GROUP BY nombre, id_empleado, fecha_acceso
-            ORDER BY fecha_acceso DESC;`,
+            ORDER BY fecha_acceso ASC;`,
             { dni }
         );
 
