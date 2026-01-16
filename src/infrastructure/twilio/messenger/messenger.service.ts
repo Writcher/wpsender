@@ -3,6 +3,7 @@ import { TwilioService } from "../twilio.service";
 import { ConfigService } from "@nestjs/config";
 import { NominaService } from "src/modules/nomina/nomina.service";
 import { EmployeeRecords, RegistrosAccesoService } from "src/modules/registrosacceso/registroacceso.service";
+import { Cron } from "@nestjs/schedule";
 
 @Injectable()
 export class MessengerService {
@@ -109,6 +110,19 @@ export class MessengerService {
             "1": formatChunk(chunks[0]),
             "2": formatChunk(chunks[1]),
             "3": formatChunk(chunks[2])
+        };
+    };
+
+    @Cron('0 9 * * 1', {
+        timeZone: 'America/Argentina/Buenos_Aires'
+    })
+    async scheduledWeeklyReport() {
+        console.log('Running scheduled report...');
+        try {
+            await this.sendReportsToAll();
+            console.log('Reports sent');
+        } catch (error) {
+            console.error('Scheduled report failed: ', error);
         };
     };
 };
