@@ -5,9 +5,10 @@ import { SqlServerService } from 'src/infrastructure/database/sqlserver/sqlserve
 import { MessengerService } from './messenger/messenger.service';
 import { NominaService } from 'src/modules/nomina/nomina.service';
 import { RegistrosAccesoService } from 'src/modules/registrosacceso/registroacceso.service';
+import { LoggerService } from '../logger/logger.service';
 
 @Module({
   controllers: [TwilioController],
-  providers: [TwilioService, MessengerService, NominaService, RegistrosAccesoService, SqlServerService]
+  providers: [TwilioService, MessengerService, NominaService, RegistrosAccesoService, SqlServerService, LoggerService]
 })
 export class TwilioModule {}

@@ -1,28 +1,48 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { TwilioService } from "../twilio.service";
 import { ConfigService } from "@nestjs/config";
 import { NominaService } from "src/modules/nomina/nomina.service";
 import { EmployeeRecords, RegistrosAccesoService } from "src/modules/registrosacceso/registroacceso.service";
 import { Cron } from "@nestjs/schedule";
+import { LoggerService } from "src/infrastructure/logger/logger.service";
 
 @Injectable()
 export class MessengerService {
+    private readonly logger = new Logger(MessengerService.name);
+
     constructor(
         private configService: ConfigService,
         private twilioService: TwilioService,
         private nominaService: NominaService,
-        private registrosAccesoService: RegistrosAccesoService
+        private registrosAccesoService: RegistrosAccesoService,
+        private fileLogger: LoggerService
     ) { }
 
     async sendReportsToAll() {
+        this.logger.log('═══════════════════════════════════════════════════');
+        //Init counters
+        let successCount = 0;
+        let failureCount = 0;
+        let skippedCount = 0;
+        const failures: Array<{ dni: string; reason: string; error?: string }> = [];
         //Get all active uocra employees with phone numbers
         const employees = await this.nominaService.getUocraEmployeesInfo();
+        this.logger.log(`Found ${employees.length} employees`);
+        this.fileLogger.logReportStart(employees.length);
         //Go through each employee
         for (const employee of employees) {
+            const failures: Array<{ dni: string; reason: string; error?: string }> = [];
             //Get employee access records
             const records = await this.registrosAccesoService.getEmployeeRecords(employee.dni);
             //Construct message
             if (records.length === 0) {
+                skippedCount++
+                this.logger.warn(`Skipped DNI ${employee.dni}`);
+                this.fileLogger.logSkipped(employee.dni, 'No records found');
+                failures.push({
+                    dni: employee.dni,
+                    reason: 'No records found'
+                });
                 continue;
             };
             const reportVariables = this.buildReportVariables(records);
@@ -38,11 +58,52 @@ export class MessengerService {
                 "4": reportVariables["3"]
             };
             try {
-                await this.twilioService.sendMessage(formatedPhone, template!, variables);
+                const result = await this.twilioService.sendMessage(formatedPhone, template!, variables);
+                if (result.success) {
+                    successCount++;
+                    this.logger.debug(`Sent DNI ${employee.dni} (${formatedPhone})`);
+                    this.fileLogger.logSuccess(employee.dni, formatedPhone);
+                } else {
+                    failureCount++;
+                    this.logger.error(`Failed DNI ${employee.dni} (${formatedPhone}): ${result.error}`);
+                    this.fileLogger.logFailure(employee.dni, formatedPhone, 'Twilio API error', result.error);
+                    failures.push({
+                        dni: employee.dni,
+                        reason: 'Twilio API error',
+                        error: result.error
+                    });
+                }
             } catch (error) {
-                console.error(`Failed to send message to DNI: ${employee.dni}:`, error);
+                failureCount++;
+                this.logger.error(`Exception DNI ${employee.dni}: ${error.message}`);
+                this.fileLogger.logFailure(employee.dni, formatedPhone, 'Processing exception', error.message);
+                failures.push({
+                    dni: employee.dni,
+                    reason: 'Processing exception',
+                    error: error.message
+                });
             };
         };
+        this.logger.log('═══════════════════════════════════════════════════');
+        this.logger.log(`Total Employees: ${employees.length}`);
+        this.logger.log(`Successful: ${successCount}`);
+        this.logger.log(`Failed: ${failureCount}`);
+        this.logger.log(`Skipped (no records): ${skippedCount}`);
+        this.logger.log('═══════════════════════════════════════════════════');
+        const summary = {
+            total: employees.length,
+            successful: successCount,
+            failed: failureCount,
+            skipped: skippedCount
+        };
+        this.fileLogger.logSummary(summary);
+        if (failures.length > 0) {
+            this.logger.error('FAILURE DETAILS:');
+            failures.forEach(f => {
+                this.logger.error(`  DNI ${f.dni}: ${f.reason}${f.error ? ` - ${f.error}` : ''}`);
+            });
+            this.logger.error('═══════════════════════════════════════════════════');
+        }
     };
 
     async sendTargetedReport(dni: string) {
