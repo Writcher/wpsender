@@ -160,6 +160,7 @@ export class MessengerService {
         ];
 
         const formatChunk = (chunk: EmployeeRecords[]): string => {
+            if (chunk.length === 0) return '-';
             return chunk.map(record =>
                 '[' + this.formatDate(record.fecha_acceso) + '] ' +
                 'Entrada: ' + this.formatTime(record.primera_hora) + ' / ' +
@@ -172,7 +173,7 @@ export class MessengerService {
             "2": formatChunk(chunks[1]),
             "3": formatChunk(chunks[2])
         };
-    };
+    }
 
     @Cron('0 9 * * 1', {
         timeZone: 'America/Argentina/Buenos_Aires'

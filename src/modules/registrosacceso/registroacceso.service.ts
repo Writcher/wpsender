@@ -32,6 +32,7 @@ export class RegistrosAccesoService {
                 WHERE fecha_acceso >= DATEADD(DAY, -7, CAST(GETDATE() AS DATE))
                 AND fecha_acceso < CAST(GETDATE() AS DATE)
                 AND id_empleado = @dni
+                AND numero_serie_dispositivo != 'L19848894'
             )
             SELECT
                 nombre,
